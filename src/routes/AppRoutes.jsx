@@ -15,9 +15,12 @@ import Admins from "../pages/Admins";
 import Employees from "../pages/Employees";
 import Assets from "../pages/Assets";
 import Vulnerabilities from "../pages/Vulnerabilities";
+import MyAssignedVulnerabilities from "../pages/MyAssignedVulnerabilities";
 import AuditLogs from "../pages/AuditLogs";
 import Reports from "../pages/Reports";
 import Profile from "../pages/Profile";
+import Settings from "../pages/Settings";
+import ThreatIntel from "../pages/ThreatIntel";
 import { NotFoundPage, ForbiddenPage, UnauthorizedPage, ServerErrorPage } from "../pages/ErrorPages";
 
 const RootRedirect = () => {
@@ -124,11 +127,33 @@ const AppRoutes = () => {
       />
 
       <Route
+        path="/my-vulnerabilities"
+        element={
+          <PrivateRoute allowedRoles={["OWNER", "ADMIN", "SECURITY_MANAGER", "SECURITY_ANALYST", "IT_ENGINEER"]}>
+            <DashboardLayout>
+              <MyAssignedVulnerabilities />
+            </DashboardLayout>
+          </PrivateRoute>
+        }
+      />
+
+      <Route
         path="/audit-logs"
         element={
           <PrivateRoute allowedRoles={["OWNER", "ADMIN"]}>
             <DashboardLayout>
               <AuditLogs />
+            </DashboardLayout>
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/threat-intel"
+        element={
+          <PrivateRoute>
+            <DashboardLayout>
+              <ThreatIntel />
             </DashboardLayout>
           </PrivateRoute>
         }
@@ -161,7 +186,7 @@ const AppRoutes = () => {
         element={
           <PrivateRoute>
             <DashboardLayout>
-              <Profile />
+              <Settings />
             </DashboardLayout>
           </PrivateRoute>
         }
@@ -173,8 +198,9 @@ const AppRoutes = () => {
       <Route path="/404" element={<NotFoundPage />} />
       <Route path="/500" element={<ServerErrorPage />} />
 
-      {/* Root redirect */}
+      {/* Root & Home redirects */}
       <Route path="/" element={<RootRedirect />} />
+      <Route path="/home" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/404" replace />} />
     </Routes>
   );

@@ -1,27 +1,262 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --soc-bg: #080c14;
+  --soc-surface: #0f172a;
+  --soc-card: rgba(15, 23, 42, 0.75);
+  --soc-border: rgba(30, 58, 138, 0.35);
+  --cyan-neon: #06b6d4;
+  --blue-neon: #3b82f6;
+  --emerald-neon: #10b981;
+  --amber-neon: #f59e0b;
+  --crimson-neon: #ef4444;
+  --font-main: 'Inter', 'Outfit', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Outfit', 'Inter', sans-serif;
-  background-color: #f5f6fa;
+  font-family: var(--font-main);
+  background-color: var(--soc-bg);
+  color: #f8fafc;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Custom transitions and pastel custom utilities */
-.glassmorphism {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+/* Custom Cyber Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.pastel-shadow {
-  box-shadow: 0 10px 30px rgba(108, 92, 231, 0.04);
+::-webkit-scrollbar-track {
+  background: #080c14;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 99px;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+/* ==================================================
+   FUTURISTIC SOC COMMAND CENTER SYSTEM
+   ================================================== */
+
+/* Glowing Container Cards */
+.soc-card,
+.enterprise-card {
+  background: rgba(15, 23, 42, 0.75) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(6, 182, 212, 0.25) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 15px rgba(6, 182, 212, 0.08) !important;
+  border-radius: 16px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.soc-card:hover,
+.enterprise-card:hover {
+  border-color: rgba(6, 182, 212, 0.5) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(6, 182, 212, 0.2) !important;
+  transform: translateY(-2px);
+}
+
+/* Neon Focus Rings */
+input:focus,
+select:focus,
+textarea:focus,
+.ant-input-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.35) !important;
+}
+
+/* --- 1. SIDEBAR & NAVIGATION --- */
+.ant-layout-sider {
+  background: #0b1120 !important;
+  border-right: 1px solid rgba(30, 58, 138, 0.4) !important;
+}
+
+.ant-menu-dark {
+  background: transparent !important;
+}
+
+.ant-menu-dark .ant-menu-item:hover,
+.ant-menu-dark .ant-menu-submenu-title:hover {
+  background: rgba(6, 182, 212, 0.1) !important;
+  color: #06b6d4 !important;
+  border-radius: 8px !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background: rgba(6, 182, 212, 0.18) !important;
+  color: #06b6d4 !important;
+  font-weight: 700 !important;
+  border-left: 3px solid #06b6d4 !important;
+  box-shadow: inset 0 0 12px rgba(6, 182, 212, 0.2) !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+/* --- 2. TRANSLUCENT GLOWING PILL BADGES --- */
+.badge-critical,
+.tag-critical {
+  background: rgba(127, 29, 29, 0.45) !important;
+  color: #fca5a5 !important;
+  border: 1px solid rgba(239, 68, 68, 0.5) !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25) !important;
+  border-radius: 99px !important;
+  padding: 2px 12px !important;
+  font-weight: 700 !important;
+}
+
+.badge-high,
+.tag-high {
+  background: rgba(124, 45, 18, 0.45) !important;
+  color: #fdba74 !important;
+  border: 1px solid rgba(249, 115, 22, 0.5) !important;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.25) !important;
+  border-radius: 99px !important;
+  padding: 2px 12px !important;
+  font-weight: 700 !important;
+}
+
+.badge-medium,
+.tag-medium {
+  background: rgba(120, 53, 15, 0.45) !important;
+  color: #fde047 !important;
+  border: 1px solid rgba(245, 158, 11, 0.5) !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25) !important;
+  border-radius: 99px !important;
+  padding: 2px 12px !important;
+  font-weight: 700 !important;
+}
+
+.badge-low,
+.badge-active,
+.badge-safe,
+.tag-low,
+.tag-active {
+  background: rgba(6, 78, 59, 0.45) !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25) !important;
+  border-radius: 99px !important;
+  padding: 2px 12px !important;
+  font-weight: 700 !important;
+}
+
+/* --- 3. TABLES IN FUTURISTIC SOC MODE --- */
+.ant-table-wrapper .ant-table {
+  background: transparent !important;
+}
+
+.ant-table-thead > tr > th {
+  background: #0b1120 !important;
+  color: #06b6d4 !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+  border-bottom: 1px solid rgba(30, 58, 138, 0.4) !important;
+}
+
+.ant-table-tbody > tr > td {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.6) !important;
+  color: #e2e8f0 !important;
+}
+
+.ant-table-tbody > tr:hover > td,
+.ant-table-tbody > tr.ant-table-row-hover > td,
+.ant-table-tbody > tr.ant-table-row-selected > td {
+  background: rgba(30, 41, 59, 0.5) !important;
+  color: #06b6d4 !important;
+}
+
+/* --- 4. ACTION BUTTONS & GLOWS --- */
+.btn-soc-primary,
+.ant-btn-primary {
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.35) !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.btn-soc-primary:hover,
+.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
+  box-shadow: 0 0 22px rgba(6, 182, 212, 0.6) !important;
+  transform: translateY(-1px);
+}
+
+.ant-btn-default {
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(30, 58, 138, 0.4) !important;
+  color: #e2e8f0 !important;
+  border-radius: 8px !important;
+}
+
+.ant-btn-default:hover {
+  background: rgba(30, 41, 59, 0.8) !important;
+  border-color: #06b6d4 !important;
+  color: #06b6d4 !important;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.25) !important;
+}
+
+/* --- 5. MODAL DIALOGS --- */
+.ant-modal-content {
+  background: #0f172a !important;
+  border: 1px solid rgba(6, 182, 212, 0.3) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(6, 182, 212, 0.2) !important;
+  border-radius: 16px !important;
+  color: #f8fafc !important;
+}
+
+.ant-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(30, 58, 138, 0.4) !important;
+}
+
+.ant-modal-title {
+  color: #06b6d4 !important;
+  font-weight: 700 !important;
+}
+
+/* --- 6. PAGINATION --- */
+.ant-pagination-item {
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(30, 58, 138, 0.4) !important;
+  border-radius: 6px !important;
+}
+
+.ant-pagination-item a {
+  color: #94a3b8 !important;
+}
+
+.ant-pagination-item-active {
+  background: rgba(6, 182, 212, 0.2) !important;
+  border-color: #06b6d4 !important;
+}
+
+.ant-pagination-item-active a {
+  color: #06b6d4 !important;
+  font-weight: 700 !important;
 }

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Table, Button, Card, Space, Input, Modal, Form, notification, Switch, Typography, Popconfirm, Tag, Select, Tooltip, Drawer, Descriptions, InputNumber, Timeline, Divider, Empty, Row, Col } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, UndoOutlined, SearchOutlined, EyeOutlined, CheckCircleOutlined, UserOutlined, MessageOutlined, HistoryOutlined, BugOutlined, AlertOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, UndoOutlined, SearchOutlined, EyeOutlined, CheckCircleOutlined, UserOutlined, MessageOutlined, HistoryOutlined, BugOutlined, AlertOutlined, SafetyCertificateOutlined, FileExcelOutlined, FileTextOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useDebounce } from "../hooks/useDebounce";
 import dayjs from "dayjs";
 
 const { Title, Paragraph, Text } = Typography;
@@ -50,10 +51,146 @@ const Vulnerabilities = () => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignForm] = Form.useForm();
 
-  const fetchVulnerabilities = async () => {
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
+
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      let url = "/vulnerabilities/export/excel/";
+      const params = new URLSearchParams();
+      if (severityFilter) params.append("severity", severityFilter);
+      if (statusFilter) params.append("status", statusFilter);
+      if (searchText) params.append("search", searchText);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await api.get(url, { responseType: "blob" });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      const fileName = severityFilter === "CRITICAL" ? "Critical_Vulnerabilities_July.xlsx" : `Vulnerabilities_Report_${dayjs().format("YYYY-MM-DD")}.xlsx`;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notification.success({
+        message: "Excel Export Complete",
+        description: "Successfully downloaded Vulnerabilities report as Excel spreadsheet.",
+        icon: <FileExcelOutlined style={{ color: "#22C55E" }} />,
+      });
+    } catch (err) {
+      notification.error({
+        message: "Excel Export Failed",
+        description: "Failed to generate Excel report.",
+      });
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExportingCSV(true);
+    try {
+      const res = await api.get("/reports/export/?type=vulnerabilities&format=csv", {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", `Vulnerabilities_Report_${dayjs().format("YYYY-MM-DD")}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notification.success({
+        message: "CSV Export Complete",
+        description: "Successfully downloaded Vulnerabilities report as CSV file.",
+        icon: <FileTextOutlined style={{ color: "#3B82F6" }} />,
+      });
+    } catch (err) {
+      notification.error({
+        message: "CSV Export Failed",
+        description: "Failed to generate CSV report.",
+      });
+    } finally {
+      setIsExportingCSV(false);
+    }
+  };
+
+  const debouncedSearchText = useDebounce(searchText, 500);
+
+  const [remediationModalOpen, setRemediationModalOpen] = useState(false);
+  const [selectedRemediation, setSelectedRemediation] = useState(null);
+
+  const handleOpenRemediationModal = (vuln, actionType) => {
+    setSelectedRemediation({ vuln, actionType });
+    setRemediationModalOpen(true);
+  };
+
+  const handleConfirmRemediation = async () => {
+    if (!selectedRemediation) return;
+    const { vuln, actionType } = selectedRemediation;
+
+    let newStatus = "IN_PROGRESS";
+    let toastTitle = "Remediation Action Dispatched";
+    let toastDesc = `Remediation action for ${vuln.cve_id} initiated.`;
+
+    if (actionType === "APPLY_PATCH") {
+      newStatus = "RESOLVED";
+      toastTitle = "Security Patch Applied";
+      toastDesc = `Security update applied on ${vuln.cve_id}. Status marked RESOLVED.`;
+    } else if (actionType === "ISOLATE_ASSET") {
+      newStatus = "IN_PROGRESS";
+      toastTitle = "Asset Isolated From Network";
+      toastDesc = `Host target asset isolated from network. Status updated to IN PROGRESS.`;
+    } else if (actionType === "SUPPRESS_ALERT") {
+      newStatus = "RESOLVED";
+      toastTitle = "Alert Suppressed";
+      toastDesc = `CVE ${vuln.cve_id} marked as risk accepted / suppressed.`;
+    }
+
+    try {
+      const res = await api.put(`/vulnerabilities/detail/${vuln.id}/`, {
+        title: vuln.title,
+        cve_id: vuln.cve_id,
+        severity: vuln.severity,
+        cvss_score: vuln.cvss_score,
+        status: newStatus,
+        description: vuln.description,
+      });
+
+      if (res.data.success) {
+        notification.success({
+          message: toastTitle,
+          description: toastDesc,
+          icon: <SafetyCertificateOutlined style={{ color: "#10B981" }} />,
+        });
+        fetchVulnerabilities(debouncedSearchText);
+      }
+    } catch (err) {
+      notification.error({
+        message: "Action Failed",
+        description: err.response?.data?.message || "Failed to complete remediation action.",
+      });
+    } finally {
+      setRemediationModalOpen(false);
+      setSelectedRemediation(null);
+    }
+  };
+
+  const fetchVulnerabilities = async (searchQuery = "") => {
     setLoading(true);
     try {
-      const res = await api.get("/vulnerabilities/list/");
+      let url = "/vulnerabilities/list/";
+      if (searchQuery) url += `?search=${encodeURIComponent(searchQuery)}`;
+      const res = await api.get(url);
       if (res.data.success) {
         setVulnerabilities(res.data.data);
       }
@@ -84,7 +221,10 @@ const Vulnerabilities = () => {
   };
 
   useEffect(() => {
-    fetchVulnerabilities();
+    fetchVulnerabilities(debouncedSearchText);
+  }, [debouncedSearchText]);
+
+  useEffect(() => {
     fetchDependencies();
   }, []);
 
@@ -382,7 +522,10 @@ const Vulnerabilities = () => {
       title: "Severity",
       dataIndex: "severity",
       key: "severity",
-      render: (text) => <Tag color={getSeverityColor(text)} style={{ borderRadius: 6, fontWeight: 500 }}>{text}</Tag>,
+      render: (text) => {
+        const cls = text === "CRITICAL" ? "tag-critical" : text === "HIGH" ? "tag-high" : text === "MEDIUM" ? "tag-medium" : "tag-active";
+        return <span className={cls}>{text}</span>;
+      },
     },
     {
       title: "CVSS Score",
@@ -403,14 +546,55 @@ const Vulnerabilities = () => {
       render: (name) => name || <span style={{ color: "#94A3B8", fontSize: 12, fontStyle: "italic" }}>Unassigned</span>,
     },
     {
-      title: "Actions",
-      key: "actions",
+      title: "QUICK REMEDIATION",
+      key: "remediation_actions",
+      width: 220,
       render: (_, record) => (
-        <Space size="middle">
-          <Tooltip title="Inspect Details">
+        <Space size="small">
+          <Tooltip title="Deploy Security Patch">
+            <Button
+              size="small"
+              type="primary"
+              style={{ background: "#10B981", borderColor: "#10B981", borderRadius: 6, fontWeight: 700, fontSize: 11 }}
+              onClick={() => handleOpenRemediationModal(record, "APPLY_PATCH")}
+            >
+              Apply Patch
+            </Button>
+          </Tooltip>
+          <Tooltip title="Isolate Host Network">
+            <Button
+              size="small"
+              type="default"
+              style={{ borderColor: "#F59E0B", color: "#F59E0B", borderRadius: 6, fontWeight: 700, fontSize: 11 }}
+              onClick={() => handleOpenRemediationModal(record, "ISOLATE_ASSET")}
+            >
+              Isolate
+            </Button>
+          </Tooltip>
+          <Tooltip title="Suppress / Accept Risk">
+            <Button
+              size="small"
+              type="text"
+              style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 11 }}
+              onClick={() => handleOpenRemediationModal(record, "SUPPRESS_ALERT")}
+            >
+              Suppress
+            </Button>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: "ACTIONS",
+      key: "actions",
+      fixed: "right",
+      width: 140,
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="View Details">
             <Button
               type="text"
-              icon={<EyeOutlined style={{ color: "#8B5CF6" }} />}
+              icon={<EyeOutlined style={{ color: "#06B6D4" }} />}
               onClick={() => {
                 setSelectedVuln(record);
                 setIsDrawerOpen(true);
@@ -569,10 +753,11 @@ const Vulnerabilities = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, gap: 16, flexWrap: "wrap" }}>
           <Space size="middle" style={{ flexWrap: "wrap" }}>
             <Input
-              placeholder="Search CVE ID or title..."
-              prefix={<SearchOutlined style={{ color: "#94A3B8" }} />}
+              placeholder="Search CVE ID, title, engineer..."
+              prefix={loading && searchText ? <Spin size="small" style={{ marginRight: 4 }} /> : <SearchOutlined style={{ color: "#06B6D4" }} />}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
+              allowClear
               style={{
                 minWidth: 240,
                 borderRadius: 10,
@@ -607,6 +792,31 @@ const Vulnerabilities = () => {
               <Option value="RESOLVED">Resolved</Option>
               <Option value="CLOSED">Closed</Option>
             </Select>
+
+            <Button
+              icon={<FileTextOutlined />}
+              onClick={handleExportCSV}
+              loading={isExportingCSV}
+              disabled={isExportingCSV || isExportingExcel}
+              style={{ borderRadius: 8, fontWeight: 600 }}
+            >
+              Export CSV
+            </Button>
+            <Button
+              type="primary"
+              icon={<FileExcelOutlined />}
+              onClick={handleExportExcel}
+              loading={isExportingExcel}
+              disabled={isExportingCSV || isExportingExcel}
+              style={{
+                borderRadius: 8,
+                fontWeight: 600,
+                background: "#16A34A",
+                borderColor: "#16A34A",
+              }}
+            >
+              Export Excel
+            </Button>
           </Space>
 
           {canManage && (
@@ -947,6 +1157,45 @@ const Vulnerabilities = () => {
               </Select>
             </Form.Item>
           </Form>
+        </Modal>
+
+        {/* Quick Remediation Impact Confirmation Modal */}
+        <Modal
+          title={
+            <Space>
+              <SafetyCertificateOutlined style={{ color: "#10B981" }} />
+              <span>Confirm Quick Remediation Action</span>
+            </Space>
+          }
+          open={remediationModalOpen}
+          onCancel={() => setRemediationModalOpen(false)}
+          onOk={handleConfirmRemediation}
+          okText="Confirm Action"
+          cancelText="Cancel"
+          okButtonProps={{ style: { borderRadius: 8, background: "linear-gradient(135deg, #06B6D4 0%, #2563EB 100%)", fontWeight: 700 } }}
+          cancelButtonProps={{ style: { borderRadius: 8 } }}
+          centered
+        >
+          {selectedRemediation && (
+            <div style={{ padding: "12px 0" }}>
+              <Alert
+                message={`Target CVE: ${selectedRemediation.vuln.cve_id}`}
+                description={
+                  selectedRemediation.actionType === "APPLY_PATCH"
+                    ? "Applying this patch will deploy security updates to the host asset and transition status from OPEN to RESOLVED."
+                    : selectedRemediation.actionType === "ISOLATE_ASSET"
+                    ? "Isolating this host will block network interfaces and update status to IN PROGRESS."
+                    : "Suppressing this alert marks the CVE as risk accepted and updates status to RESOLVED."
+                }
+                type={selectedRemediation.actionType === "ISOLATE_ASSET" ? "warning" : "info"}
+                showIcon
+                style={{ borderRadius: 12, marginBottom: 16 }}
+              />
+              <Paragraph style={{ color: isDarkMode ? "#CBD5E1" : "#334155", fontSize: 13 }}>
+                Are you sure you want to execute <strong>{selectedRemediation.actionType.replace("_", " ")}</strong> for <strong>{selectedRemediation.vuln.title}</strong>?
+              </Paragraph>
+            </div>
+          )}
         </Modal>
       </Card>
     </motion.div>

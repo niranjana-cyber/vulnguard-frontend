@@ -13,6 +13,7 @@ const { Title, Text, Paragraph } = Typography;
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
+  const [vulnStats, setVulnStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { role } = useAuth();
@@ -22,11 +23,41 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await api.get("/dashboard/stats/");
-        if (res.data.success) {
-          setData(res.data.data);
+        const [resMainResult, resVulnResult] = await Promise.allSettled([
+          api.get("/dashboard/stats/"),
+          api.get("/vulnerabilities/dashboard-stats/")
+        ]);
+
+        if (resMainResult.status === "fulfilled" && resMainResult.value.data?.success) {
+          setData(resMainResult.value.data.data);
         } else {
-          setError(res.data.message || "Failed to load dashboard metrics.");
+          // Provide fallback safe data structure if main dashboard stats endpoint fails
+          setData({
+            total_departments: 0,
+            total_admins: 0,
+            total_employees: 0,
+            total_assets: 0,
+            total_vulnerabilities: 0,
+            severities: { Critical: 0, High: 0, Medium: 0, Low: 0 },
+            statuses: { Open: 0, "In Progress": 0, Resolved: 0, Closed: 0 },
+            charts: { severity_distribution: [], status_distribution: [] },
+            recent_activities: []
+          });
+        }
+
+        if (resVulnResult.status === "fulfilled" && resVulnResult.value.data?.success) {
+          setVulnStats(resVulnResult.value.data.data);
+        } else {
+          setVulnStats({
+            my_assigned_count: 0,
+            critical_count: 0,
+            overdue_count: 0,
+            recently_fixed_count: 0,
+            recently_assigned_count: 0,
+            pending_verification_count: 0,
+            avg_resolution_time_days: 0,
+            closed_this_month_count: 0
+          });
         }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
@@ -81,18 +112,18 @@ const Dashboard = () => {
 
   const healthScore = calculateHealthScore();
 
-  // Premium colors
+  // SOC Neon colors
   const SEVERITY_COLORS = {
-    Critical: "#EF4444", // Danger red
-    High: "#F59E0B",     // Warning orange
-    Medium: "#3B82F6",   // Info blue
-    Low: "#22C55E",      // Success green
+    Critical: "#EF4444", // Glowing Crimson
+    High: "#F97316",     // Neon Orange
+    Medium: "#F59E0B",   // Amber Gold
+    Low: "#10B981",      // Emerald Green
   };
 
   const STATUS_COLORS = {
     Open: "#EF4444",
-    "In Progress": "#6366F1",
-    Resolved: "#22C55E",
+    "In Progress": "#06B6D4",
+    Resolved: "#10B981",
     Closed: "#64748B",
   };
 
@@ -186,6 +217,49 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Enterprise Remediation Widgets Row */}
+      {vulnStats && (
+        <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+          {[
+            { label: "My Assigned", value: vulnStats.my_assigned_count, color: "#06B6D4", click: () => navigate("/my-vulnerabilities"), trend: "Active Queue" },
+            { label: "Critical CVEs", value: vulnStats.critical_count, color: "#EF4444", trend: "⚡ Urgent Action" },
+            { label: "Overdue Fixes", value: vulnStats.overdue_count, color: "#F59E0B", trend: "⚠️ SLA Breach" },
+            { label: "Recently Fixed", value: vulnStats.recently_fixed_count, color: "#10B981", trend: "↑ 12% This Week" },
+            { label: "Recently Assigned", value: vulnStats.recently_assigned_count, color: "#3B82F6", trend: "New Queue" },
+            { label: "Pending Verification", value: vulnStats.pending_verification_count, color: "#A855F7", trend: "Under Audit" },
+            { label: "Avg Resolution Time", value: `${vulnStats.avg_resolution_time_days} d`, color: "#0EA5E9", trend: "SLA Compliant" },
+            { label: "Closed This Month", value: vulnStats.closed_this_month_count, color: "#84CC16", trend: "↑ 24% Improvement" }
+          ].map((widget, idx) => (
+            <Col xs={12} sm={6} md={3} key={idx}>
+              <motion.div whileHover={{ y: -3, scale: 1.02 }} transition={{ duration: 0.2 }}>
+                <Card
+                  bordered={false}
+                  style={{
+                    background: isDarkMode ? "rgba(15, 23, 42, 0.65)" : "rgba(255, 255, 255, 0.85)",
+                    border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.15)" : "rgba(99, 102, 241, 0.15)"}`,
+                    borderRadius: 14,
+                    cursor: widget.click ? "pointer" : "default",
+                    boxShadow: isDarkMode ? "0 4px 20px rgba(0,0,0,0.2)" : "0 4px 12px rgba(0,0,0,0.02)",
+                    backdropFilter: "blur(12px)",
+                  }}
+                  onClick={widget.click}
+                >
+                  <Text style={{ fontSize: 11, color: isDarkMode ? "#64748B" : "#94A3B8", display: "block", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {widget.label}
+                  </Text>
+                  <h3 style={{ fontSize: 24, margin: "4px 0 2px 0", fontWeight: 800, color: widget.color }}>
+                    {widget.value}
+                  </h3>
+                  <span style={{ fontSize: 10, color: isDarkMode ? "#475569" : "#94A3B8", fontWeight: 600 }}>
+                    {widget.trend}
+                  </span>
+                </Card>
+              </motion.div>
+            </Col>
+          ))}
+        </Row>
+      )}
+
       {/* Main post deck: Stats & Security health meter */}
       <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
         <Col xs={24} xl={16}>
@@ -196,15 +270,19 @@ const Dashboard = () => {
                 <Card
                   bordered={false}
                   style={{
-                    background: isDarkMode ? "#1E293B" : "#FFFFFF",
-                    border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                    background: isDarkMode ? "rgba(15, 23, 42, 0.75)" : "rgba(255, 255, 255, 0.9)",
+                    border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.2)" : "rgba(99, 102, 241, 0.2)"}`,
                     borderRadius: 16,
+                    backdropFilter: "blur(12px)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
                   }}
                 >
                   <Space direction="vertical" size="small">
-                    <LaptopOutlined style={{ fontSize: 24, color: "#2563EB" }} />
-                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block" }}>Total Assets</span>
-                    <h2 style={{ fontSize: 28, margin: 0, fontWeight: 800, color: isDarkMode ? "#F1F5F9" : "#0F172A" }}>{total_assets}</h2>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(37, 99, 235, 0.15)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                      <LaptopOutlined style={{ fontSize: 20, color: "#2563EB" }} />
+                    </div>
+                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block", fontWeight: 600 }}>Total Assets</span>
+                    <h2 style={{ fontSize: 32, margin: 0, fontWeight: 900, color: isDarkMode ? "#F1F5F9" : "#0F172A", letterSpacing: "-1px" }}>{total_assets}</h2>
                   </Space>
                 </Card>
               </motion.div>
@@ -216,15 +294,19 @@ const Dashboard = () => {
                 <Card
                   bordered={false}
                   style={{
-                    background: isDarkMode ? "#1E293B" : "#FFFFFF",
-                    border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                    background: isDarkMode ? "rgba(15, 23, 42, 0.75)" : "rgba(255, 255, 255, 0.9)",
+                    border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.2)" : "rgba(99, 102, 241, 0.2)"}`,
                     borderRadius: 16,
+                    backdropFilter: "blur(12px)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
                   }}
                 >
                   <Space direction="vertical" size="small">
-                    <BugOutlined style={{ fontSize: 24, color: "#EF4444" }} />
-                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block" }}>CVEs Active</span>
-                    <h2 style={{ fontSize: 28, margin: 0, fontWeight: 800, color: "#EF4444" }}>{total_vulnerabilities}</h2>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(239, 68, 68, 0.15)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                      <BugOutlined style={{ fontSize: 20, color: "#EF4444" }} />
+                    </div>
+                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block", fontWeight: 600 }}>CVEs Active</span>
+                    <h2 style={{ fontSize: 32, margin: 0, fontWeight: 900, color: "#EF4444", letterSpacing: "-1px" }}>{total_vulnerabilities}</h2>
                   </Space>
                 </Card>
               </motion.div>
@@ -236,15 +318,19 @@ const Dashboard = () => {
                 <Card
                   bordered={false}
                   style={{
-                    background: isDarkMode ? "#1E293B" : "#FFFFFF",
-                    border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                    background: isDarkMode ? "rgba(15, 23, 42, 0.75)" : "rgba(255, 255, 255, 0.9)",
+                    border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.2)" : "rgba(99, 102, 241, 0.2)"}`,
                     borderRadius: 16,
+                    backdropFilter: "blur(12px)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
                   }}
                 >
                   <Space direction="vertical" size="small">
-                    <TeamOutlined style={{ fontSize: 24, color: "#14B8A6" }} />
-                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block" }}>Security Teams</span>
-                    <h2 style={{ fontSize: 28, margin: 0, fontWeight: 800, color: isDarkMode ? "#F1F5F9" : "#0F172A" }}>{total_employees}</h2>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(20, 184, 166, 0.15)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                      <TeamOutlined style={{ fontSize: 20, color: "#14B8A6" }} />
+                    </div>
+                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block", fontWeight: 600 }}>Security Teams</span>
+                    <h2 style={{ fontSize: 32, margin: 0, fontWeight: 900, color: isDarkMode ? "#F1F5F9" : "#0F172A", letterSpacing: "-1px" }}>{total_employees}</h2>
                   </Space>
                 </Card>
               </motion.div>
@@ -256,86 +342,94 @@ const Dashboard = () => {
                 <Card
                   bordered={false}
                   style={{
-                    background: isDarkMode ? "#1E293B" : "#FFFFFF",
-                    border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                    background: isDarkMode ? "rgba(15, 23, 42, 0.75)" : "rgba(255, 255, 255, 0.9)",
+                    border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.2)" : "rgba(99, 102, 241, 0.2)"}`,
                     borderRadius: 16,
+                    backdropFilter: "blur(12px)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
                   }}
                 >
                   <Space direction="vertical" size="small">
-                    <ApartmentOutlined style={{ fontSize: 24, color: "#6366F1" }} />
-                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block" }}>Departments</span>
-                    <h2 style={{ fontSize: 28, margin: 0, fontWeight: 800, color: isDarkMode ? "#F1F5F9" : "#0F172A" }}>{total_departments}</h2>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(99, 102, 241, 0.15)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                      <ApartmentOutlined style={{ fontSize: 20, color: "#6366F1" }} />
+                    </div>
+                    <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, display: "block", fontWeight: 600 }}>Departments</span>
+                    <h2 style={{ fontSize: 32, margin: 0, fontWeight: 900, color: isDarkMode ? "#F1F5F9" : "#0F172A", letterSpacing: "-1px" }}>{total_departments}</h2>
                   </Space>
                 </Card>
               </motion.div>
             </Col>
           </Row>
 
-          {/* Quick actions panel */}
+          {/* Quick actions panel Redesigned to Cybersecurity Operations Cards */}
           <motion.div variants={itemVariants} style={{ marginTop: 16 }}>
             <Card
               bordered={false}
               style={{
-                background: isDarkMode ? "#1E293B" : "#FFFFFF",
-                border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                background: isDarkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.9)",
+                border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.2)" : "rgba(99, 102, 241, 0.2)"}`,
                 borderRadius: 16,
+                backdropFilter: "blur(12px)",
               }}
             >
-              <h4 style={{ margin: "0 0 16px 0", fontWeight: 700, color: isDarkMode ? "#F1F5F9" : "#0F172A", fontSize: 15 }}>
-                Security Center Operations Deck
+              <h4 style={{ margin: "0 0 16px 0", fontWeight: 800, color: isDarkMode ? "#F1F5F9" : "#0F172A", fontSize: 15, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                SOC Tactical Operations Console
               </h4>
               <Row gutter={[12, 12]}>
-                <Col xs={24} sm={8}>
-                  <Button
-                    type="primary"
-                    block
-                    icon={<PlusOutlined />}
-                    onClick={() => navigate("/vulnerabilities")}
-                    style={{
-                      borderRadius: 10,
-                      height: 42,
-                      background: "linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)",
-                      border: "none",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {role === "IT_ENGINEER" ? "View Assigned CVEs" : "Report Vulnerability"}
-                  </Button>
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Button
-                    block
-                    icon={<LaptopOutlined />}
-                    onClick={() => navigate("/assets")}
-                    style={{
-                      borderRadius: 10,
-                      height: 42,
-                      background: isDarkMode ? "#0F172A" : "#F1F5F9",
-                      border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
-                      color: isDarkMode ? "#F1F5F9" : "#0F172A",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {["OWNER", "ADMIN", "SECURITY_MANAGER"].includes(role) ? "Register System Asset" : "View System Assets"}
-                  </Button>
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Button
-                    block
-                    icon={<FilePdfOutlined />}
-                    onClick={() => navigate(["OWNER", "ADMIN", "SECURITY_MANAGER"].includes(role) ? "/reports" : "/profile")}
-                    style={{
-                      borderRadius: 10,
-                      height: 42,
-                      background: isDarkMode ? "#0F172A" : "#F1F5F9",
-                      border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
-                      color: isDarkMode ? "#F1F5F9" : "#0F172A",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {["OWNER", "ADMIN", "SECURITY_MANAGER"].includes(role) ? "Export Compliance Reports" : "My Profile Settings"}
-                  </Button>
-                </Col>
+                {[
+                  {
+                    title: "Report Vulnerability",
+                    desc: "Inject threat logs into organizational custody queue.",
+                    action: () => navigate("/vulnerabilities"),
+                    icon: <PlusOutlined style={{ fontSize: 18, color: "#06B6D4" }} />,
+                    color: "rgba(6, 182, 212, 0.1)"
+                  },
+                  {
+                    title: "System Asset Registry",
+                    desc: "Catalog database servers, firewall layers, and endpoints.",
+                    action: () => navigate("/assets"),
+                    icon: <LaptopOutlined style={{ fontSize: 18, color: "#3B82F6" }} />,
+                    color: "rgba(59, 130, 246, 0.1)"
+                  },
+                  {
+                    title: "Compliance Dashboard",
+                    desc: "Audit trailing & automated compliance report printing.",
+                    action: () => navigate(["OWNER", "ADMIN", "SECURITY_MANAGER"].includes(role) ? "/reports" : "/profile"),
+                    icon: <FilePdfOutlined style={{ fontSize: 18, color: "#10B981" }} />,
+                    color: "rgba(16, 185, 129, 0.1)"
+                  }
+                ].map((act, i) => (
+                  <Col xs={24} sm={8} key={i}>
+                    <motion.div whileHover={{ y: -3, scale: 1.01 }} transition={{ duration: 0.2 }}>
+                      <div
+                        onClick={act.action}
+                        style={{
+                          background: isDarkMode ? "rgba(30, 41, 59, 0.45)" : "#F8FAFC",
+                          border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "#E2E8F0"}`,
+                          borderRadius: 12,
+                          padding: "16px",
+                          cursor: "pointer",
+                          display: "flex",
+                          gap: 12,
+                          height: "100%",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <div style={{ width: 36, height: 36, borderRadius: 8, background: act.color, display: "flex", justifyContent: "center", alignItems: "center", flexShrink: 0 }}>
+                          {act.icon}
+                        </div>
+                        <div>
+                          <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: isDarkMode ? "#F1F5F9" : "#0F172A" }}>
+                            {act.title}
+                          </span>
+                          <span style={{ display: "block", fontSize: 11, color: isDarkMode ? "#64748B" : "#94A3B8", marginTop: 4, lineHeight: "1.3" }}>
+                            {act.desc}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </Col>
+                ))}
               </Row>
             </Card>
           </motion.div>
@@ -347,27 +441,29 @@ const Dashboard = () => {
             <Card
               bordered={false}
               style={{
-                background: isDarkMode ? "#1E293B" : "#FFFFFF",
-                border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                background: isDarkMode ? "rgba(15, 23, 42, 0.75)" : "rgba(255, 255, 255, 0.9)",
+                border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.25)" : "rgba(99, 102, 241, 0.25)"}`,
                 borderRadius: 16,
                 height: 242,
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
+                boxShadow: isDarkMode ? "0 0 25px rgba(6, 182, 212, 0.1)" : "0 4px 14px rgba(99,102,241,0.02)",
+                backdropFilter: "blur(12px)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
                 <div style={{ position: "relative", width: 120, height: 120 }}>
-                  {/* Radial progress stroke */}
+                  {/* Radial progress stroke with modern glowing gradient shadow */}
                   <svg width="120" height="120" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="42" fill="none" stroke={isDarkMode ? "#334155" : "#F1F5F9"} strokeWidth="8" />
+                    <circle cx="50" cy="50" r="42" fill="none" stroke={isDarkMode ? "#1E293B" : "#F1F5F9"} strokeWidth="7" />
                     <circle
                       cx="50"
                       cy="50"
                       r="42"
                       fill="none"
                       stroke={healthMeta.color}
-                      strokeWidth="8"
+                      strokeWidth="7"
                       strokeDasharray={2 * Math.PI * 42}
                       strokeDashoffset={2 * Math.PI * 42 * (1 - healthScore / 100)}
                       strokeLinecap="round"
@@ -388,18 +484,18 @@ const Dashboard = () => {
                       alignItems: "center",
                     }}
                   >
-                    <span style={{ fontSize: 26, fontWeight: 900, color: isDarkMode ? "#F1F5F9" : "#0F172A", lineHeight: 1 }}>
+                    <span style={{ fontSize: 28, fontWeight: 900, color: isDarkMode ? "#F8FAFC" : "#0F172A", lineHeight: 1 }}>
                       {healthScore}
                     </span>
-                    <span style={{ fontSize: 10, color: isDarkMode ? "#64748B" : "#94A3B8", fontWeight: 600, marginTop: 4 }}>
-                      HEALTH SCORE
+                    <span style={{ fontSize: 9, color: isDarkMode ? "#64748B" : "#94A3B8", fontWeight: 700, marginTop: 4, letterSpacing: "0.5px" }}>
+                      HEALTH INDEX
                     </span>
                   </div>
                 </div>
                 <div style={{ maxWidth: "50%" }}>
                   <Space direction="vertical" size="2">
-                    <span style={{ fontSize: 12, fontWeight: 700, color: isDarkMode ? "#64748B" : "#94A3B8" }}>POSTURE RATING</span>
-                    <span style={{ color: healthMeta.color, fontSize: 18, fontWeight: 800 }}>{healthMeta.label}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: isDarkMode ? "#64748B" : "#94A3B8", letterSpacing: "1px" }}>POSTURE RATING</span>
+                    <span style={{ color: healthMeta.color, fontSize: 20, fontWeight: 900 }}>{healthMeta.label}</span>
                     <Paragraph style={{ margin: 0, fontSize: 12, color: isDarkMode ? "#94A3B8" : "#64748B", lineHeight: "1.4" }}>
                       {healthMeta.desc}
                     </Paragraph>

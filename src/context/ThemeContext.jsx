@@ -5,16 +5,17 @@ const ThemeContext = createContext(null);
 export const ThemeProvider = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem("isDarkMode");
-    return saved === "true";
+    return saved !== null ? saved === "true" : true; // Default to SOC Dark Mode
   });
 
   useEffect(() => {
     localStorage.setItem("isDarkMode", isDarkMode);
-    // Apply body-level background color overrides for perfect dark/light mode surface painting
     if (isDarkMode) {
-      document.body.style.backgroundColor = "#0B1120"; // premium cybersecurity dark
+      document.documentElement.classList.add("dark");
+      document.body.style.backgroundColor = "#080C14";
     } else {
-      document.body.style.backgroundColor = "#F8FAFC"; // light slate gray
+      document.documentElement.classList.remove("dark");
+      document.body.style.backgroundColor = "#F8FAFC";
     }
   }, [isDarkMode]);
 

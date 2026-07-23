@@ -5,6 +5,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AppRoutes from "./routes/AppRoutes";
 
+import ErrorBoundary from "./components/ErrorBoundary";
+
 const MainApp = () => {
   const { isDarkMode } = useTheme();
 
@@ -56,7 +58,9 @@ const MainApp = () => {
     >
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>
     </ConfigProvider>

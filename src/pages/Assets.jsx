@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Table, Button, Card, Space, Input, Modal, Form, notification, Switch, Typography, Popconfirm, Tag, Select, Tooltip, InputNumber, Row, Col } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, UndoOutlined, SearchOutlined, LaptopOutlined, AlertOutlined, SafetyCertificateOutlined, CloudServerOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, UndoOutlined, SearchOutlined, LaptopOutlined, AlertOutlined, SafetyCertificateOutlined, CloudServerOutlined, FileExcelOutlined, FileTextOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useDebounce } from "../hooks/useDebounce";
+import dayjs from "dayjs";
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -12,7 +14,7 @@ const { Option } = Select;
 const Assets = () => {
   const { role } = useAuth();
   const { isDarkMode } = useTheme();
-  const isReadOnly = role === "SECURITY_MANAGER";
+  const isReadOnly = ["AUDITOR", "SUPPORT", "READ_ONLY", "SECURITY_MANAGER"].includes(role);
 
   const [assets, setAssets] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -26,10 +28,81 @@ const Assets = () => {
   const [editingAsset, setEditingAsset] = useState(null);
   const [form] = Form.useForm();
 
-  const fetchAssets = async () => {
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
+
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      let url = "/assets/export/excel/";
+      if (searchText) url += `?search=${encodeURIComponent(searchText)}`;
+      const res = await api.get(url, { responseType: "blob" });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", `Company_Assets_${dayjs().format("YYYY-MM-DD")}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notification.success({
+        message: "Excel Export Complete",
+        description: "Successfully downloaded Assets Inventory as Excel spreadsheet.",
+        icon: <FileExcelOutlined style={{ color: "#22C55E" }} />,
+      });
+    } catch (err) {
+      notification.error({
+        message: "Excel Export Failed",
+        description: "Failed to generate Excel file.",
+      });
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExportingCSV(true);
+    try {
+      const res = await api.get("/reports/export/?type=assets&format=csv", {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", `Company_Assets_${dayjs().format("YYYY-MM-DD")}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notification.success({
+        message: "CSV Export Complete",
+        description: "Successfully downloaded Assets Inventory as CSV file.",
+        icon: <FileTextOutlined style={{ color: "#3B82F6" }} />,
+      });
+    } catch (err) {
+      notification.error({
+        message: "CSV Export Failed",
+        description: "Failed to generate CSV file.",
+      });
+    } finally {
+      setIsExportingCSV(false);
+    }
+  };
+
+  const debouncedSearchText = useDebounce(searchText, 500);
+
+  const fetchAssets = async (searchQuery = "") => {
     setLoading(true);
     try {
-      const res = await api.get("/assets/list/");
+      let url = "/assets/list/";
+      if (searchQuery) url += `?search=${encodeURIComponent(searchQuery)}`;
+      const res = await api.get(url);
       if (res.data.success) {
         setAssets(res.data.data);
       }
@@ -57,7 +130,10 @@ const Assets = () => {
   };
 
   useEffect(() => {
-    fetchAssets();
+    fetchAssets(debouncedSearchText);
+  }, [debouncedSearchText]);
+
+  useEffect(() => {
     if (!isReadOnly) {
       fetchDependencies();
     }
@@ -203,10 +279,10 @@ const Assets = () => {
   };
 
   const getRiskScoreTag = (score) => {
-    if (score >= 9) return <Tag color="#EF4444" style={{ fontWeight: 600 }}>{score} (CRITICAL)</Tag>;
-    if (score >= 7) return <Tag color="#F59E0B" style={{ fontWeight: 600 }}>{score} (HIGH)</Tag>;
-    if (score >= 4) return <Tag color="#3B82F6" style={{ fontWeight: 600 }}>{score} (MEDIUM)</Tag>;
-    return <Tag color="#22C55E" style={{ fontWeight: 600 }}>{score} (LOW)</Tag>;
+    if (score >= 9) return <span className="tag-critical">{score} CRITICAL</span>;
+    if (score >= 7) return <span className="tag-high">{score} HIGH</span>;
+    if (score >= 4) return <span className="tag-medium">{score} MEDIUM</span>;
+    return <span className="tag-active">{score} LOW</span>;
   };
 
   const columns = [
@@ -398,9 +474,10 @@ const Assets = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, gap: 16, flexWrap: "wrap" }}>
           <Input
             placeholder="Search by name, OS, IP, hostname..."
-            prefix={<SearchOutlined style={{ color: "#94A3B8" }} />}
+            prefix={loading && searchText ? <Spin size="small" style={{ marginRight: 4 }} /> : <SearchOutlined style={{ color: "#06B6D4" }} />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            allowClear
             style={{
               maxWidth: 320,
               borderRadius: 10,
@@ -409,12 +486,38 @@ const Assets = () => {
               border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
             }}
           />
-          {!isReadOnly && (
-            <Space>
-              <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13 }}>View Deleted:</span>
-              <Switch checked={showDeleted} onChange={(checked) => setShowDeleted(checked)} />
-            </Space>
-          )}
+          <Space wrap>
+            <Button
+              icon={<FileTextOutlined />}
+              onClick={handleExportCSV}
+              loading={isExportingCSV}
+              disabled={isExportingCSV || isExportingExcel}
+              style={{ borderRadius: 8, fontWeight: 600 }}
+            >
+              Export CSV
+            </Button>
+            <Button
+              type="primary"
+              icon={<FileExcelOutlined />}
+              onClick={handleExportExcel}
+              loading={isExportingExcel}
+              disabled={isExportingCSV || isExportingExcel}
+              style={{
+                borderRadius: 8,
+                fontWeight: 600,
+                background: "#16A34A",
+                borderColor: "#16A34A",
+              }}
+            >
+              Export Excel
+            </Button>
+            {!isReadOnly && (
+              <>
+                <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", fontSize: 13, marginLeft: 8 }}>View Deleted:</span>
+                <Switch checked={showDeleted} onChange={(checked) => setShowDeleted(checked)} />
+              </>
+            )}
+          </Space>
         </div>
 
         <Table

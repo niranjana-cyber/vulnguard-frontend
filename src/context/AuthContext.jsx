@@ -13,20 +13,22 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem("accessToken");
+      const storedRole = localStorage.getItem("userRole");
       if (token) {
+        setIsAuthenticated(true);
+        if (storedRole) setRole(storedRole);
         try {
           const res = await api.get("/auth/profile/");
-          if (res.data.success) {
+          if (res.data.success && res.data.data) {
             setUser(res.data.data);
             setRole(res.data.data.role);
             localStorage.setItem("userRole", res.data.data.role);
-            setIsAuthenticated(true);
-          } else {
-            handleLocalPurge();
           }
         } catch (error) {
-          console.error("Auth initialization failed:", error);
-          handleLocalPurge();
+          console.warn("Auth profile sync note:", error.response?.data?.message || error.message);
+          if (error.response?.status === 401) {
+            handleLocalPurge();
+          }
         }
       } else {
         handleLocalPurge();

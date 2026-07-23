@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Table, Card, Space, Input, Select, Drawer, Descriptions, Tag, Typography, Button, notification, Avatar } from "antd";
-import { SearchOutlined, EyeOutlined, SyncOutlined, UserOutlined } from "@ant-design/icons";
+import { SearchOutlined, EyeOutlined, SyncOutlined, UserOutlined, FileExcelOutlined, FileTextOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import api from "../services/api";
 import { useTheme } from "../context/ThemeContext";
@@ -22,6 +22,78 @@ const AuditLogs = () => {
   // Drawer detail state
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
+
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      let url = "/audit-logs/export/excel/";
+      const params = new URLSearchParams();
+      if (moduleFilter) params.append("module", moduleFilter);
+      if (actionFilter) params.append("action", actionFilter);
+      if (searchText) params.append("search", searchText);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await api.get(url, { responseType: "blob" });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", `Audit_Logs_${dayjs().format("YYYY-MM-DD")}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notification.success({
+        message: "Excel Export Complete",
+        description: "Successfully downloaded Audit Logs as Excel spreadsheet.",
+        icon: <FileExcelOutlined style={{ color: "#22C55E" }} />,
+      });
+    } catch (err) {
+      notification.error({
+        message: "Excel Export Failed",
+        description: "Failed to generate Audit Logs Excel report.",
+      });
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExportingCSV(true);
+    try {
+      const res = await api.get("/reports/export/?type=audit_logs&format=csv", {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", `Audit_Logs_${dayjs().format("YYYY-MM-DD")}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notification.success({
+        message: "CSV Export Complete",
+        description: "Successfully downloaded Audit Logs as CSV file.",
+        icon: <FileTextOutlined style={{ color: "#3B82F6" }} />,
+      });
+    } catch (err) {
+      notification.error({
+        message: "CSV Export Failed",
+        description: "Failed to generate CSV file.",
+      });
+    } finally {
+      setIsExportingCSV(false);
+    }
+  };
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -225,6 +297,33 @@ const AuditLogs = () => {
             <Option value="ACTIVATE">ACTIVATE</Option>
             <Option value="DEACTIVATE">DEACTIVATE</Option>
           </Select>
+
+          <Space wrap>
+            <Button
+              icon={<FileTextOutlined />}
+              onClick={handleExportCSV}
+              loading={isExportingCSV}
+              disabled={isExportingCSV || isExportingExcel}
+              style={{ borderRadius: 8, fontWeight: 600 }}
+            >
+              Export CSV
+            </Button>
+            <Button
+              type="primary"
+              icon={<FileExcelOutlined />}
+              onClick={handleExportExcel}
+              loading={isExportingExcel}
+              disabled={isExportingCSV || isExportingExcel}
+              style={{
+                borderRadius: 8,
+                fontWeight: 600,
+                background: "#16A34A",
+                borderColor: "#16A34A",
+              }}
+            >
+              Export Excel
+            </Button>
+          </Space>
         </div>
 
         <Table
