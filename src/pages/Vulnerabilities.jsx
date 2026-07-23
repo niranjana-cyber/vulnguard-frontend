@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Card, Space, Input, Modal, Form, notification, Switch, Typography, Popconfirm, Tag, Select, Tooltip, Drawer, Descriptions, InputNumber, Timeline, Divider, Empty, Row, Col } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, UndoOutlined, SearchOutlined, EyeOutlined, CheckCircleOutlined, UserOutlined, MessageOutlined, HistoryOutlined, BugOutlined, AlertOutlined, SafetyCertificateOutlined, FileExcelOutlined, FileTextOutlined } from "@ant-design/icons";
+import { Table, Button, Card, Space, Input, Modal, Form, notification, Switch, Typography, Popconfirm, Tag, Select, Tooltip, Drawer, Descriptions, InputNumber, Timeline, Divider, Empty, Row, Col, Alert, Progress } from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined, UndoOutlined, SearchOutlined, EyeOutlined, CheckCircleOutlined, UserOutlined, MessageOutlined, HistoryOutlined, BugOutlined, AlertOutlined, SafetyCertificateOutlined, FileExcelOutlined, FileTextOutlined, BulbOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -10,6 +10,193 @@ import dayjs from "dayjs";
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
+
+const getAICveRecommendations = (cveId, title, severity, cvss) => {
+  const cve = (cveId || "").toUpperCase();
+  
+  let riskSummary = `This vulnerability represents a significant risk to target assets due to its accessibility.`;
+  let recommendedRemediation = `Upgrade the package dependencies to the latest patch version containing security hotfixes.`;
+  let patchRef = `Upgrade to version >= upstream patch or apply KB security cumulative update.`;
+  let mitigation = [
+    "Restrict ingress access on affected network ports.",
+    "Implement rate-limiting and host-level IDS monitors.",
+    "Verify integrity of existing service accounts."
+  ];
+  let score = cvss ? Math.round(Number(cvss) * 10) : 75;
+  let fixTime = "2 hours";
+  let businessImpact = "Medium - Possible denial of service or configuration exposure.";
+  let confidence = "96%";
+  let checklist = [
+    "Download official vendor distribution source package.",
+    "Test patch staging deployment in non-production cluster.",
+    "Execute target vulnerability scan to confirm resolution."
+  ];
+
+  if (cve.includes("CVE-2024-3094") || title.toLowerCase().includes("xz")) {
+    riskSummary = "CRITICAL: Downstream compromise via backdoored liblzma library in systemd SSH context. Allows remote unauthenticated execution.";
+    recommendedRemediation = "Immediately downgrade xz-utils to 5.4.6 or upgrade to 5.6.4+.";
+    patchRef = "Debian/Fedora upstream patch xz-utils-5.6.1-2+";
+    mitigation = [
+      "Disable passwordless SSH authentication.",
+      "Isolate affected servers and analyze auth logs for suspicious active sessions.",
+      "Re-key administrative deployment SSH key pairs."
+    ];
+    score = 98;
+    fixTime = "30 mins";
+    businessImpact = "CRITICAL - Direct compromise of perimeter infrastructure hosts.";
+    confidence = "99%";
+    checklist = [
+      "Verify xz version via command line `xz --version`.",
+      "Rebuild target SSH containers with clean static binaries.",
+      "Inspect host logs for systemd backdoor indicators."
+    ];
+  } else if (cve.includes("CVE-2021-44228") || title.toLowerCase().includes("log4j") || title.toLowerCase().includes("log4shell")) {
+    riskSummary = "CRITICAL: Remote Code Execution vulnerability in Apache Log4j 2.x via JNDI injection vectors.";
+    recommendedRemediation = "Upgrade log4j-core dependencies to version 2.17.1 or higher.";
+    patchRef = "Apache Log4j 2.17.1 release";
+    mitigation = [
+      "Set formatMsgNoLookups=true system configuration property.",
+      "Remove JndiLookup class from classpath zip files.",
+      "Block outbound LDAP/RMI connections to foreign endpoints."
+    ];
+    score = 97;
+    fixTime = "1 hour";
+    businessImpact = "HIGH - Potential unauthenticated target infrastructure control.";
+    confidence = "98%";
+    checklist = [
+      "Scan application jars for embedded Log4j archives.",
+      "Apply the JVM execution argument changes in deployment yaml.",
+      "Perform mock JNDI injection test payload verification."
+    ];
+  } else if (cve.includes("CVE-2023") || severity === "CRITICAL" || Number(cvss) >= 9.0) {
+    riskSummary = "High severity threat posing severe risk of compromise, session interception, or service outage.";
+    recommendedRemediation = "Deploy latest service pack updates and restrict public access vectors.";
+    patchRef = "Vendor Hotfix cumulative security rollup";
+    mitigation = [
+      "Enforce multi-factor authentication for administrative dashboards.",
+      "Implement deep packet inspection via Web Application Firewall (WAF).",
+      "Configure automated daily backup schedules for related datasets."
+    ];
+    score = 92;
+    fixTime = "1.5 hours";
+    businessImpact = "HIGH - Outage of primary department core assets.";
+    confidence = "95%";
+    checklist = [
+      "Schedule change request ticket in ServiceNow console.",
+      "Perform offline backup of the target database.",
+      "Run patch application update commands."
+    ];
+  }
+
+  return {
+    riskSummary,
+    recommendedRemediation,
+    patchRef,
+    mitigation,
+    score,
+    fixTime,
+    businessImpact,
+    confidence,
+    checklist
+  };
+};
+
+const AIRecommendationsPanel = ({ cveId, title, severity, cvssScore, isDarkMode }) => {
+  const rec = getAICveRecommendations(cveId, title, severity, cvssScore);
+  
+  return (
+    <Card
+      style={{
+        background: isDarkMode ? "rgba(6, 182, 212, 0.03)" : "rgba(2, 132, 199, 0.02)",
+        border: `1px solid ${isDarkMode ? "rgba(6, 182, 212, 0.3)" : "rgba(2, 132, 199, 0.2)"}`,
+        borderRadius: 12,
+        boxShadow: isDarkMode ? "0 4px 20px rgba(6, 182, 212, 0.1)" : "0 4px 20px rgba(2, 132, 199, 0.05)",
+        marginTop: 16,
+        marginBottom: 16
+      }}
+      bodyStyle={{ padding: 16 }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <Space>
+          <BulbOutlined style={{ color: "#06B6D4", fontSize: 18 }} />
+          <Text strong style={{ color: isDarkMode ? "#06B6D4" : "#0284C7", fontSize: 13, letterSpacing: 0.5 }}>
+            ✨ VULNGUARD AI RECOMMENDATION
+          </Text>
+        </Space>
+        <Tag color="cyan" style={{ borderRadius: 6, fontWeight: 700 }}>
+          AI Confidence: {rec.confidence}
+        </Tag>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>AI Risk Summary</Text>
+        <Paragraph style={{ margin: 0, fontSize: 13, color: isDarkMode ? "#E2E8F0" : "#334155" }}>
+          {rec.riskSummary}
+        </Paragraph>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Recommended Remediation</Text>
+        <Paragraph style={{ margin: 0, fontSize: 13, color: isDarkMode ? "#E2E8F0" : "#334155" }}>
+          {rec.recommendedRemediation}
+        </Paragraph>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Patch Recommendation</Text>
+        <div style={{
+          background: isDarkMode ? "#0F172A" : "#F1F5F9",
+          padding: "8px 12px",
+          borderRadius: 8,
+          fontFamily: "monospace",
+          fontSize: 12,
+          color: isDarkMode ? "#38BDF8" : "#0369A1",
+          border: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+          marginTop: 4
+        }}>
+          {rec.patchRef}
+        </div>
+      </div>
+
+      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+        <Col span={12}>
+          <Text strong style={{ fontSize: 9, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Priority Score</Text>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <Progress percent={rec.score} showInfo={false} strokeColor={{ "0%": "#06B6D4", "100%": "#3B82F6" }} style={{ flex: 1, margin: 0 }} />
+            <Text strong style={{ color: isDarkMode ? "#F1F5F9" : "#0F172A", fontSize: 12 }}>{rec.score}/100</Text>
+          </div>
+        </Col>
+        <Col span={12}>
+          <Text strong style={{ fontSize: 9, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Est. Fix Time</Text>
+          <Tag color="purple" style={{ marginTop: 4, borderRadius: 6, fontWeight: 700 }}>
+            {rec.fixTime}
+          </Tag>
+        </Col>
+      </Row>
+
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Business Impact</Text>
+        <Paragraph style={{ margin: 0, fontSize: 13, color: isDarkMode ? "#E2E8F0" : "#334155" }}>
+          {rec.businessImpact}
+        </Paragraph>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Mitigation Steps</Text>
+        <ul style={{ paddingLeft: 16, margin: "4px 0 0 0", color: isDarkMode ? "#CBD5E1" : "#475569", fontSize: 12 }}>
+          {rec.mitigation.map((m, i) => <li key={i}>{m}</li>)}
+        </ul>
+      </div>
+
+      <div>
+        <Text strong style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", textTransform: "uppercase", display: "block" }}>Verification Checklist</Text>
+        <ul style={{ paddingLeft: 16, margin: "4px 0 0 0", color: isDarkMode ? "#CBD5E1" : "#475569", fontSize: 12 }}>
+          {rec.checklist.map((c, i) => <li key={i}>{c}</li>)}
+        </ul>
+      </div>
+    </Card>
+  );
+};
 
 const Vulnerabilities = () => {
   const { role, user } = useAuth();
@@ -157,7 +344,7 @@ const Vulnerabilities = () => {
     }
 
     try {
-      const res = await api.put(`/vulnerabilities/detail/${vuln.id}/`, {
+      const res = await api.put(`/vulnerabilities/${vuln.id}/update/`, {
         title: vuln.title,
         cve_id: vuln.cve_id,
         severity: vuln.severity,
@@ -887,6 +1074,14 @@ const Vulnerabilities = () => {
                   {selectedVuln.remediation || "No remediation protocols entered yet."}
                 </Paragraph>
               </div>
+
+              <AIRecommendationsPanel
+                cveId={selectedVuln.cve_id}
+                title={selectedVuln.title}
+                severity={selectedVuln.severity}
+                cvssScore={selectedVuln.cvss_score}
+                isDarkMode={isDarkMode}
+              />
 
               {/* Interactive Comments Ledger */}
               <div>

@@ -197,10 +197,11 @@ const Employees = () => {
 
   const handleToggleStatus = async (record) => {
     try {
-      const res = await api.patch(`/auth/employees/${record.id}/status/`);
+      const endpoint = record.is_active_employee ? "deactivate" : "activate";
+      const res = await api.patch(`/auth/employees/${record.id}/${endpoint}/`);
       if (res.data.success) {
         notification.success({
-          message: res.data.message || "Status toggled successfully.",
+          message: res.data.message || `Employee status updated to ${record.is_active_employee ? "inactive" : "active"}.`,
         });
         fetchEmployees();
       }
